@@ -23,7 +23,8 @@ else {
 
 workflow {
   tmhmm(seqs)
-    | collectFile(name: params.outputFileName, storeDir: params.outputDir)
+  gff = tmhmm2gff(tmhmm.out)
+  indexResults(gff.collectFile(), params.outputFileName)
 }
 
 process tmhmm {
@@ -36,6 +37,46 @@ input:
 
   script:
   """
-  tmhmm $task.ext.args $subsetFasta >tmhmm_results
+  tmhmm -short $subsetFasta >tmhmm_results
+  """
+}
+
+
+process tmhmm2gff {
+  container = 'bioperl/bioperl:stable'
+
+  input:
+    path subset
+
+  output:
+    path 'tmhmm_subset.gff'
+
+  script:
+  """
+  tmhmm2gff.pl --inputFile $subset \
+                 --outputFile tmhmm_subset.gff
+  """
+
+}
+
+
+process indexResults {
+  container = 'biocontainers/tabix:v1.9-11-deb_cv1'
+
+  publishDir params.outputDir, mode: 'copy'
+
+  input:
+    path gff
+    val outputFileName
+
+  output:
+    path '*.gz'
+    path '*.gz.tbi'
+
+  script:
+  """
+  sort -k1,1 -k4,4n $gff > ${outputFileName}
+  bgzip ${outputFileName}
+  tabix -p gff ${outputFileName}.gz
   """
 }
